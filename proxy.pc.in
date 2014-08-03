@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: proxy
+Description: Type-safe family of proxy classes for C++
+Version: @VERSION@
+Libs: 
+Cflags: -I${includedir}

@@ -1,0 +1,99 @@
+			
+# Note that this is NOT a relocateable package
+
+%define name            @PACKAGE@
+%define ver             @RELEASE@
+%define RELEASE         11
+%define rel             %{?CUSTOM_RELEASE} %{!?CUSTOM_RELEASE:%RELEASE}
+%define prefix          /usr
+%define mandir          /usr/man
+%define datadir         /usr/share
+%define sysconfdir      /etc
+%define localstatedir   /var/lib
+
+Summary:    C++ template classes providing a family of proxy objects
+Name:       %name
+Version:    %ver
+Release:    %rel
+Source:     http://github.com/cjnygard/proxy-0.1.0.tar.gz
+License:    GNU Free Documentation License
+Group:      Development/Libraries
+#BuildArch:  noarch
+BuildRoot:  /var/tmp/%{name}-%{ver}-root
+URL:        http://github.com/cjnygard/proxy
+
+%description 
+The %name package provides a family of proxy pointer objects.  
+
+%package devel
+Summary: development tools for the %name library
+Group: Development/Libraries
+Requires: %name = %version
+                                                                                
+%description devel
+The %name-devel package contains the header files needed for development 
+with %name.
+                                                                                
+
+#==============================================================================
+# preparation section
+#==============================================================================
+
+%prep
+%setup -q -n proxy-%{version}
+
+#==============================================================================
+# build section
+#==============================================================================
+
+%build
+%configure
+make %{?_smp_mflags}
+
+#==============================================================================
+# install section
+#==============================================================================
+
+%install
+if [ -d %{buildroot} ]; then rm -rf %{buildroot}; fi
+make DESTDIR=%{buildroot} install
+
+# new redhat versions don't use .la
+rm -f %{buildroot}%{_libdir}/*.la
+
+#==============================================================================
+# clenup section
+#==============================================================================
+%post -p /sbin/ldconfig
+
+%postun -p /sbin/ldconfig
+
+%clean
+rm -rf %{buildroot}
+
+#==============================================================================
+# files that go into proxy package
+#==============================================================================
+%files devel
+%defattr(-, root, root, 755)
+#%doc CHANGES PORTING
+#%doc %{_datadir}/doc/gtkmm-2.0
+%{_includedir}/*
+%{_libdir}/pkgconfig/*.pc
+
+
+%files
+%defattr(-, root, root)
+%doc COPYING AUTHORS README ChangeLog NEWS INSTALL 
+#%{_libdir}/*.so.*
+
+#%attr(755,root,root) %prefix/lib/lib*.so.*
+#%{prefix}/share
+
+#==============================================================================
+
+%changelog
+* Wed Aug 11 2004 Carl Nygard, cjnygard at fast dot net
+- release 0.1.0 - first public release
+
+

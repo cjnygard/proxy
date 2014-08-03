@@ -1,0 +1,133 @@
+#! /bin/bash
+
+arch=`uname -i`
+
+
+function increment_release_flag {
+    local file=`ls *spec.in`
+    local math="1+`grep "%define RELEASE" $file | sed -e "s/ \+/\t/g" | cut -f3`"
+    local newver=`echo $math | bc`
+    cp $file /tmp
+    cat /tmp/$file | sed -e "s/\(%define RELEASE[ \t]\+\)[0-9]\+/\1$newver/" > $file
+    rm /tmp/$file
+}
+
+function find_version {
+     grep AC_INIT configure.ac | cut -d[ -f3 | sed -e "s/[^0-9.]//g"
+}
+
+function autoconf_bootstrap {
+    echo "[aclocal]...."
+    aclocal
+    echo "[autoheader]...."
+    autoheader
+    echo "[libtoolize --force]...."
+    libtoolize --force
+    echo "[automake --add-missing]...."
+    automake --add-missing
+    echo "[autoconf]...."
+    autoconf
+}
+
+function log_rpm_info {
+    local infodir=~/rpms/info
+    [ -d $infodir ] || mkdir $infodir
+    local version=`find_version`
+    local rel=`grep "%define RELEASE" *spec.in | sed "s/.*[ \t]\+\([0-9]\+\)/\1/"`
+    local pwd=`pwd`
+    local pkg=`basename $pwd`
+    local file=$infodir/$pkg-$version-$rel.info
+
+    echo "Built by `whoami` on `date`" >> $file
+    echo `uname -a` >> $file
+    svn info >> $file
+    svn diff >> $file
+}
+
+function install_rpms {
+    local version=`find_version`
+    local rel=`grep "%define RELEASE" *spec.in | sed "s/.*[ \t]\+\([0-9]\+\)/\1/"`
+    local pwd=`pwd`
+    local pkg=`basename $pwd`
+    local fileSpec="$pkg{,-devel,-dao}-$version-$rel*.rpm"
+    local rpms=""
+    for i in `ls ~/rpms/RPMS/$arch/$pkg{,-devel,-dao}-$version-$rel*.rpm`
+    do
+      if ! expr "$i" : ".*-debug" > /dev/null
+          then
+          rpms="$rpms $i"
+      fi
+    done
+    echo "Installing $rpms"
+    sudo rpm -Uvh $rpms
+}
+
+    
+
+if test "$#" -lt "1"
+then
+    exit 1
+fi
+
+while [ $# -gt 0 ]
+do
+  case $1 in 
+    --incr) incrRelFlag="Y";;
+    --install) installFlag="Y";;
+    --flag) shift; configureFlag=$1;;
+    rpm) rpmFlag="Y";
+         distFlag="Y";
+         makeFlag="Y";
+         confFlag="Y";;
+    dist) distFlag="Y";
+         makeFlag="Y";
+         confFlag="Y";;
+    make) makeFlag="Y";
+         confFlag="Y";;
+    conf*) confFlag="Y";;
+    *) 
+    echo "Usage: bootstrap [--incr] [configure] [make] [dist] [rpm]";
+    echo "   --incr  increment build number"
+    echo 
+    echo "Choose one of the target stages to which to build"
+    exit 1
+  esac
+  shift
+done
+
+if [ "$incrRelFlag" = "Y" ]
+then
+    increment_release_flag
+fi
+
+autoconf_bootstrap
+
+if [ "$confFlag" = "Y" ]
+then
+    echo "[configure --enable-maintainer-mode $configureFlag]...."
+    ./configure --enable-maintainer-mode $configureFlag || { echo "configure failed."; exit 1; }
+fi
+
+if [ "$makeFlag" = "Y" ]
+then
+    echo "[make]...."
+    make || { echo "make failed."; exit 1; }
+fi
+
+if [ "$distFlag" = "Y" ]
+then
+    echo "[make dist]...."
+    make dist || { echo "make dist failed."; exit 1; }
+fi
+
+if [ "$rpmFlag" = "Y" ]
+then
+    echo "[rpmbuild -ta *.tar.gz]...."
+    rpmbuild -ta *.tar.gz || { rm *.tar.gz; echo "rpmbuild failed."; exit 1; }
+    rm *.tar.gz
+    log_rpm_info
+fi
+
+[ "$installFlag" = "Y" ] && { install_rpms || exit $?; }
+
+exit 0
